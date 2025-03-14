@@ -10,8 +10,9 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import uk.ac.ucl.model.IndexEntry;
 
-public class Note {
+public class Note  {
     private int index;
     private String title;
     private String content;
