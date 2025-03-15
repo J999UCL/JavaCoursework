@@ -1,46 +1,49 @@
 // Note.java
 package uk.ac.ucl.model;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.type.CollectionType;
-
-import java.io.File;
-import java.io.IOException;
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
-import uk.ac.ucl.model.IndexEntry;
 
-public class Note  {
-    private int index;
+import com.fasterxml.jackson.annotation.JsonFormat;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.databind.type.CollectionType;
+import jakarta.servlet.ServletException;
+
+public class Note implements IndexEntry {
+    private int id;
     private String title;
-    private String content;
-    private String category;
-    private String imageUrl; // Optional
-    private final String createdAt;
+    private List<Block> contentBlocks;
 
-    public Note(int index, String title, String content, String category, String imageUrl, String url, String createdAt) {
-        this.index = index;
+    // Configure the date format for JSON output
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd HH:mm:ss")
+    private LocalDateTime createdAt;
+
+    // Default constructor
+    public Note() {
+        this.contentBlocks = new ArrayList<>();
+        this.createdAt = LocalDateTime.now();
+    }
+
+    // Parameterized constructor
+    public Note(int id, String title, List<Block> contentBlocks, LocalDateTime createdAt) {
+        this.id = id;
         this.title = title;
-        this.content = content;
-        this.category = category;
-        this.imageUrl = imageUrl;
+        this.contentBlocks = contentBlocks;
         this.createdAt = createdAt;
     }
 
-    public Note() {
-        LocalDateTime createdAt = LocalDateTime.now();
-        DateTimeFormatter formatter = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
-        this.createdAt = createdAt.format(formatter);
+    // Getters and setters
+
+    public int getId() {
+        return id;
     }
 
-    public int getIndex() {
-        return index;
-    }
-
-    public void setIndex(int index) {
-        this.index = index;
+    public void setId(int id) {
+        this.id = id;
     }
 
     public String getTitle() {
@@ -51,52 +54,91 @@ public class Note  {
         this.title = title;
     }
 
-    public String getContent() {
-        return content;
+    public List<Block> getContentBlocks() {
+        return contentBlocks;
     }
 
-    public void setContent(String content) {
-        this.content = content;
+    public void setContentBlocks(List<Block> contentBlocks) {
+        this.contentBlocks = contentBlocks;
     }
 
-    public String getCategory() {
-        return category;
-    }
-
-    public void setCategory(String category) {
-        this.category = category;
-    }
-
-    public String getImageUrl() {
-        return imageUrl;
-    }
-
-    public void setImageUrl(String imageUrl) {
-        this.imageUrl = imageUrl;
-    }
-
-    public String getCreatedAt() {
+    public LocalDateTime getCreatedAt() {
         return createdAt;
     }
 
-    // Note.java
-    public static List<Note> loadNotesFromFile(String filePath) throws IOException {
-        ObjectMapper objectMapper = new ObjectMapper();
-        File file = new File(filePath);
-        if (file.exists() && file.length() > 0) {
-            CollectionType listType = objectMapper.getTypeFactory().constructCollectionType(ArrayList.class, Note.class);
-            return objectMapper.readValue(file, listType);
-        } else {
-            return new ArrayList<>();
-        }
+    public void setCreatedAt(LocalDateTime createdAt) {
+        this.createdAt = createdAt;
     }
 
-    public static void saveNotesToFile(List<Note> notes, String filePath) throws IOException {
-        ObjectMapper objectMapper = new ObjectMapper();
-        if (notes == null || notes.isEmpty()) {
-            objectMapper.writeValue(new File(filePath), new ArrayList<Note>());
-        } else {
-            objectMapper.writeValue(new File(filePath), notes);
+    // Function to add a text content block
+    public void addTextContentBlock(String text) {
+        int blockId = contentBlocks.size() + 1;
+        Block textBlock = new Block(blockId, "text", text);
+        contentBlocks.add(textBlock);
+    }
+
+    public void addImageContentBlock(String imageUrl) {
+        int blockId = contentBlocks.size() + 1;
+        Block imageBlock = new Block(blockId, "image", imageUrl);
+        contentBlocks.add(imageBlock);
+    }
+
+    // Function to delete a content block
+    public void deleteContentBlockById(int blockId) {
+        contentBlocks.removeIf(block -> block.getId() == blockId);
+    }
+
+
+    @Override
+    public String getName() {
+        return title;
+    }
+
+    @Override
+    public LocalDateTime get_time() {
+        return createdAt;
+    }
+
+    @Override
+    public List<IndexEntry> getChildren() throws ServletException {
+        return IndexEntry.super.getChildren();
+    }
+
+    /**
+     * Converts this Note into a JSON object (an ObjectNode) using Jackson.
+     * The resulting JSON includes fields for type, id, title, createdAt, and contentBlocks.
+     *
+     * @return an ObjectNode representing this Note.
+     */
+    public ObjectNode toJson() {
+        ObjectMapper mapper = new ObjectMapper();
+        ObjectNode noteJson = mapper.createObjectNode();
+
+        noteJson.put("type", "note");              // Helps during deserialization.
+        noteJson.put("id", id);
+        noteJson.put("title", title);
+        noteJson.put("createdAt", createdAt.toString());
+
+        ArrayNode blocksArray = mapper.createArrayNode();
+        if (contentBlocks != null) {
+            for (Block block : contentBlocks) {
+                blocksArray.add(block.toJson());
+            }
         }
+        noteJson.set("contentBlocks", blocksArray);
+
+        return noteJson;
+    }
+
+    // Note typically doesn't have children, so the default getChildren() returning an empty list is sufficient.
+
+    @Override
+    public String toString() {
+        return "Note{" +
+                "id=" + id +
+                ", title='" + title + '\'' +
+                ", contentBlocks=" + contentBlocks +
+                ", createdAt=" + createdAt.toString()+
+                '}';
     }
 }

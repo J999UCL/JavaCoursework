@@ -1,5 +1,10 @@
 package uk.ac.ucl.model;
 
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import jakarta.servlet.ServletException;
+
+import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Collections;
 
@@ -10,6 +15,7 @@ public interface IndexEntry {
      * @return the name of the index entry.
      */
     String getName();
+    LocalDateTime get_time();
 
     /**
      * Returns a list of child entries if this entry is composite (e.g., a category with subcategories or notes).
@@ -17,7 +23,9 @@ public interface IndexEntry {
      *
      * @return a list of child IndexEntry objects, or an empty list if none exist.
      */
-    default List<IndexEntry> getChildren() {
-        return Collections.emptyList();
+    default List<IndexEntry> getChildren() throws ServletException {
+        return new ArrayList<>();
     }
+
+
 }
