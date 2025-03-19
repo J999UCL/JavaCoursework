@@ -1,8 +1,6 @@
 package uk.ac.ucl.servlets;
 
-import uk.ac.ucl.model.Block;
-import uk.ac.ucl.model.Note;
-import uk.ac.ucl.model.FileStorageManager;
+import uk.ac.ucl.model.*;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.annotation.MultipartConfig;
 import jakarta.servlet.annotation.WebServlet;
@@ -13,9 +11,10 @@ import jakarta.servlet.http.Part;
 
 import java.io.File;
 import java.io.IOException;
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+
+import static uk.ac.ucl.model.Utils.getCategoryHierarchy;
 
 @WebServlet({"/note/create", "/note/edit"})
 @MultipartConfig
@@ -35,7 +34,7 @@ public class NoteFormServlet extends HttpServlet {
         // Get the category path from a parameter (or default to empty)
         String categoryPath = request.getParameter("categoryPath");
         if (categoryPath == null) {
-            categoryPath = "";
+            categoryPath = "0";
         }
         request.setAttribute("categoryPath", categoryPath);
 
@@ -146,10 +145,9 @@ public class NoteFormServlet extends HttpServlet {
         }
         List<Block> blocks = getBlocksFromRequest(request);
         String title = request.getParameter("title");
-        String categoryPath = request.getParameter("categoryPath");
-        if (categoryPath == null) {
-            categoryPath = "";
-        }
+        String categoryPathParam = request.getParameter("categoryPath");
+        if (categoryPathParam == null){categoryPathParam = "0";}
+        CategoryIndex currentCategory = getCategoryHierarchy(fileStorageManager, categoryPathParam).getLast();
 
         if (isEdit) {
             String noteIdStr = request.getParameter("noteId");
@@ -174,10 +172,16 @@ public class NoteFormServlet extends HttpServlet {
             noteToEdit.setTitle(title);
             noteToEdit.setContentBlocks(blocks);
         } else {
-            int newId = notes.size();
-            Note newNote = new Note(newId, title, blocks, LocalDateTime.now());
+            Note newNote = new Note(title, blocks);
             notes.add(newNote);
-            // Optionally update category membership here.
+            currentCategory.addNoteId(newNote.getId());
+
+            try {
+                fileStorageManager.SaveNewNote(categoryPathParam, newNote.getId());
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+
         }
 
         try {
@@ -185,20 +189,24 @@ public class NoteFormServlet extends HttpServlet {
         } catch (Exception e) {
             throw new ServletException("Error saving note.", e);
         }
+
+
+
         // Redirect back to the category view.
-        String redirectUrl = request.getContextPath() + "/notes" + (categoryPath.isEmpty() ? "" : "?categoryPath=" + categoryPath);
-        response.sendRedirect(redirectUrl);
+        response.sendRedirect(request.getContextPath() + "/?categoryPath=" + categoryPathParam);
     }
 
     private List<Block> getBlocksFromRequest(HttpServletRequest request) throws ServletException, IOException {
+        // Java code snippet in getBlocksFromRequest method
         String[] blockTypes = request.getParameterValues("blockType");
         String[] blockDataArr = request.getParameterValues("blockData");
         List<Block> blocks = new ArrayList<>();
-        if (blockTypes != null && blockDataArr != null && blockTypes.length == blockDataArr.length) {
+        if (blockTypes != null) {
             for (int i = 0; i < blockTypes.length; i++) {
                 String type = blockTypes[i];
-                String data = blockDataArr[i];
-                Block block = new Block(i+1,type, data);
+                String data = ("text".equalsIgnoreCase(type) && blockDataArr != null)
+                        ? blockDataArr[i] : "";
+                Block block = new Block(i + 1, type, data);
                 if ("image".equalsIgnoreCase(type)) {
                     Part imagePart = request.getPart("blockImage" + i);
                     if (imagePart != null && imagePart.getSubmittedFileName() != null
@@ -208,7 +216,8 @@ public class NoteFormServlet extends HttpServlet {
                         if (!uploadsDirFile.exists()) {
                             uploadsDirFile.mkdirs();
                         }
-                        String fileName = System.currentTimeMillis() + "_" + imagePart.getSubmittedFileName();
+                        String fileName = System.currentTimeMillis() + "_"
+                                + imagePart.getSubmittedFileName();
                         String filePath = uploadsDir + File.separator + fileName;
                         imagePart.write(filePath);
                         block.setData("uploads/" + fileName);
@@ -219,4 +228,5 @@ public class NoteFormServlet extends HttpServlet {
         }
         return blocks;
     }
+
 }

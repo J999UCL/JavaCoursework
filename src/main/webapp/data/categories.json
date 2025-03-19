@@ -1,6 +1,37 @@
 {
   "name" : "Root",
-  "noteIds" : [ ],
-  "subCategories" : [ ],
-  "createdAt" : [ 2025, 3, 15, 20, 29, 58, 840569100 ]
+  "noteIds" : [ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 28, 29, 31, 34, 35, 36 ],
+  "subCategories" : [ {
+    "name" : "category1",
+    "noteIds" : [ 1, 24, 26, 27 ],
+    "subCategories" : [ {
+      "name" : "category2",
+      "noteIds" : [ ],
+      "subCategories" : [ ],
+      "createdAt" : [ 2025, 3, 17, 4, 22, 11, 33359800 ],
+      "id" : 25
+    }, {
+      "name" : "category3",
+      "noteIds" : [ ],
+      "subCategories" : [ ],
+      "createdAt" : [ 2025, 3, 17, 4, 48, 18, 237922300 ],
+      "id" : 28
+    }, {
+      "name" : "ibiza",
+      "noteIds" : [ 33 ],
+      "subCategories" : [ ],
+      "createdAt" : [ 2025, 3, 19, 18, 21, 34, 416946500 ],
+      "id" : 32
+    } ],
+    "createdAt" : [ 2025, 3, 16, 19, 22, 12, 524620100 ],
+    "id" : 21
+  }, {
+    "name" : "my",
+    "noteIds" : [ ],
+    "subCategories" : [ ],
+    "createdAt" : [ 2025, 3, 16, 19, 30, 40, 57430800 ],
+    "id" : 22
+  } ],
+  "createdAt" : [ 2025, 3, 15, 20, 29, 58, 840569100 ],
+  "id" : 0
 }

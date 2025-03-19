@@ -6,10 +6,13 @@ import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import uk.ac.ucl.model.FileStorageManager;
+import uk.ac.ucl.model.IndexEntry;
 import uk.ac.ucl.model.Note;
 
 import java.io.IOException;
 import java.util.List;
+
+import static uk.ac.ucl.model.Utils.getCategoryHierarchy;
 
 @WebServlet("/note/view/*")
 public class NoteViewServlet extends HttpServlet {
@@ -25,65 +28,30 @@ public class NoteViewServlet extends HttpServlet {
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
-        // URL pattern: /note/view/category1/category2/123
-        // Extract the path info
-        String pathInfo = request.getPathInfo(); // e.g., "/category1/category2/123"
-        if (pathInfo == null || pathInfo.equals("/")) {
-            response.sendError(HttpServletResponse.SC_BAD_REQUEST, "No note specified.");
-            return;
-        }
 
-        // Split the path by "/" to get its segments.
-        String[] parts = pathInfo.split("/");
-        if (parts.length < 2) {
-            response.sendError(HttpServletResponse.SC_BAD_REQUEST, "Invalid note path.");
-            return;
-        }
+        String categoryPathParam = request.getParameter("categoryPath");
+        if (categoryPathParam == null){categoryPathParam = "0";}
 
-        // The last segment should be the note ID.
-        String noteIdStr = parts[parts.length - 1];
-        int noteId;
+        int noteId = 0;
         try {
-            noteId = Integer.parseInt(noteIdStr);
+            noteId = Integer.parseInt(request.getParameter("Id"));
         } catch (NumberFormatException e) {
-            response.sendError(HttpServletResponse.SC_BAD_REQUEST, "Invalid note ID.");
-            return;
+            throw new RuntimeException("noteId parsing gone wrong",e);
         }
 
-        // Load all notes from storage.
-        List<Note> allNotes;
-        try {
-            allNotes = fileStorageManager.loadNotes();
-        } catch (Exception ex) {
-            throw new ServletException("Unable to load notes.", ex);
-        }
+        IndexEntry currentCategory = getCategoryHierarchy(fileStorageManager, categoryPathParam).getLast();
+        List<IndexEntry> children = currentCategory.getChildren();
 
-        // Find the note with the matching ID.
-        Note foundNote = null;
-        for (Note note : allNotes) {
-            if (note.getId() == noteId) {
-                foundNote = note;
-                break;
-            }
-        }
+        int finalNoteId = noteId;
+        Note note = (Note) children.stream()
+                .filter(entry -> entry.getId() == finalNoteId)
+                .findAny()
+                .orElseThrow(() -> new ServletException("Unable to find note."));
 
-        if (foundNote == null) {
-            response.sendError(HttpServletResponse.SC_NOT_FOUND, "Note not found.");
-            return;
-        }
-
-        // Optionally, build a category path string for breadcrumb/back navigation.
-        // All segments except the first empty string and the last note ID.
-        StringBuilder categoryPath = new StringBuilder();
-        for (int i = 1; i < parts.length - 1; i++) {
-            categoryPath.append("/").append(parts[i]);
-        }
-
-        // Set attributes to be used in the JSP.
-        request.setAttribute("note", foundNote);
-        request.setAttribute("categoryPath", categoryPath.toString());
-
-        // Forward to noteView.jsp for rendering the full note.
+        request.setAttribute("note", note);
+        request.setAttribute("categoryPath", categoryPathParam);
         request.getRequestDispatcher("/noteView.jsp").forward(request, response);
+
+
     }
 }

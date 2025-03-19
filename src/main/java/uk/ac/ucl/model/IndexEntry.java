@@ -1,5 +1,7 @@
 package uk.ac.ucl.model;
 
+import com.fasterxml.jackson.annotation.JsonSubTypes;
+import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import jakarta.servlet.ServletException;
 
@@ -14,6 +16,7 @@ public interface IndexEntry {
      *
      * @return the name of the index entry.
      */
+    int getId();
     String getName();
     LocalDateTime get_time();
 

@@ -5,7 +5,9 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -14,7 +16,8 @@ import com.fasterxml.jackson.databind.type.CollectionType;
 import jakarta.servlet.ServletException;
 
 public class Note implements IndexEntry {
-    private int id;
+
+    private final int id;
     private String title;
     private List<Block> contentBlocks;
 
@@ -22,14 +25,20 @@ public class Note implements IndexEntry {
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime createdAt;
 
-    // Default constructor
-    public Note() {
-        this.contentBlocks = new ArrayList<>();
+    public Note(String title, List<Block> contentBlocks){
+        this.id = PersistentIdGenerator.getNextId();
+        this.title = title;
+        this.contentBlocks = contentBlocks;
         this.createdAt = LocalDateTime.now();
+
     }
 
     // Parameterized constructor
-    public Note(int id, String title, List<Block> contentBlocks, LocalDateTime createdAt) {
+    @JsonCreator
+    public Note(@JsonProperty("id") int id,
+                @JsonProperty("title") String title,
+                @JsonProperty("contentBlocks") List<Block> contentBlocks,
+                @JsonProperty("createdAt") LocalDateTime createdAt) {
         this.id = id;
         this.title = title;
         this.contentBlocks = contentBlocks;
@@ -40,10 +49,6 @@ public class Note implements IndexEntry {
 
     public int getId() {
         return id;
-    }
-
-    public void setId(int id) {
-        this.id = id;
     }
 
     public String getTitle() {
@@ -90,11 +95,13 @@ public class Note implements IndexEntry {
 
 
     @Override
+    @JsonIgnore
     public String getName() {
         return title;
     }
 
     @Override
+    @JsonIgnore
     public LocalDateTime get_time() {
         return createdAt;
     }

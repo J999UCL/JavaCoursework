@@ -9,6 +9,8 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 
+import static uk.ac.ucl.model.Utils.getCategoryHierarchy;
+
 public class FileStorageManager {
     private static final String NOTES_FILE = "C:\\Users\\jeetu\\Desktop\\Java\\JavaCoursework\\src\\main\\webapp\\data\\notes.json";
     private static final String CATEGORIES_FILE = "C:\\Users\\jeetu\\Desktop\\Java\\JavaCoursework\\src\\main\\webapp\\data\\categories.json";
@@ -51,11 +53,24 @@ public class FileStorageManager {
     /**
      * Saves the CategoryIndex (hierarchical category structure) to the CATEGORIES_FILE.
      *
-     * @param categoryIndex the category index to save.
+     * @param newCategory the category index to save.
      * @throws Exception if an I/O error occurs.
      */
-    public void saveCategories(CategoryIndex categoryIndex) throws Exception {
-        objectMapper.writeValue(new File(CATEGORIES_FILE), categoryIndex);
+    public void saveNewCategories(String categoryPathParam, CategoryIndex newCategory) throws Exception {
+
+        List<CategoryIndex> hierarchy = getCategoryHierarchy(this, categoryPathParam);
+        CategoryIndex root = hierarchy.getFirst();
+        CategoryIndex parentReference = hierarchy.getLast();
+        parentReference.addSubCategory(newCategory);
+        objectMapper.writeValue(new File(CATEGORIES_FILE), root);
+    }
+
+    public void SaveNewNote(String categoryPathParam, int id) throws Exception {
+        List<CategoryIndex> hierarchy = getCategoryHierarchy(this, categoryPathParam);
+        CategoryIndex root = hierarchy.getFirst();
+        CategoryIndex parentReference = hierarchy.getLast();
+        parentReference.addNoteId(id);
+        objectMapper.writeValue(new File(CATEGORIES_FILE), root);
     }
 
     /**
@@ -69,7 +84,7 @@ public class FileStorageManager {
         if (!file.exists()) {
             // Return a default empty category index (e.g., with name "Root")
             CategoryIndex defaultCategory = new CategoryIndex("Root");
-            saveCategories(defaultCategory);
+            objectMapper.writeValue(new File(CATEGORIES_FILE), defaultCategory);
             return new CategoryIndex("Root");
         }
         return objectMapper.readValue(file, CategoryIndex.class);

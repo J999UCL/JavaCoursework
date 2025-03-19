@@ -14,13 +14,6 @@
             }
         %>
     </title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 20px; }
-        fieldset { border: 1px solid #ccc; margin-bottom: 15px; padding: 10px; }
-        legend { font-weight: bold; }
-        textarea { width: 100%; }
-        .button-group { margin-top: 20px; }
-    </style>
 </head>
 <body>
 <h2>
@@ -33,7 +26,7 @@
     %>
 </h2>
 <!-- The form action uses the servlet mapping; the category path is passed via a hidden field -->
-<form action="<%= request.getContextPath() %>/note/<%= request.getAttribute("action") %>" method="post" enctype="multipart/form-data">
+<form action="<%= request.getContextPath() %><%= request.getAttribute("action") %>" method="post" enctype="multipart/form-data">
     <!-- Hidden field for the current category path -->
     <input type="hidden" name="categoryPath" value="<%= request.getAttribute("categoryPath") %>" />
 
