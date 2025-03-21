@@ -16,7 +16,7 @@ public interface IndexEntry {
      *
      * @return the name of the index entry.
      */
-    int getId();
+    long getId();
     String getName();
     LocalDateTime get_time();
 

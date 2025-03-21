@@ -1,98 +1,87 @@
 <%@ page contentType="text/html; charset=UTF-8" language="java" %>
-<%@ page import="java.util.*, uk.ac.ucl.model.Note, uk.ac.ucl.model.Block" %>
+<%@ taglib prefix="c" uri="http://java.sun.com/jsp/jstl/core" %>
+<%@ taglib prefix="fn" uri="http://java.sun.com/jsp/jstl/functions" %>
 <!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
     <title>
-        <%
-            String action = (String) request.getAttribute("action");
-            if ("edit".equals(action)) {
-                out.print("Edit Note");
-            } else {
-                out.print("Create Note");
-            }
-        %>
+        <c:choose>
+            <c:when test="${action eq 'edit'}">Edit Note</c:when>
+            <c:otherwise>Create Note</c:otherwise>
+        </c:choose>
     </title>
+    <style>
+        fieldset { margin-bottom: 1em; }
+        .button-group input { margin-right: 1em; }
+    </style>
 </head>
 <body>
 <h2>
-    <%
-        if ("edit".equals(request.getAttribute("action"))) {
-            out.print("Edit Note");
-        } else {
-            out.print("Create Note");
-        }
-    %>
+    <c:choose>
+        <c:when test="${action eq 'edit'}">Edit Note</c:when>
+        <c:otherwise>Create Note</c:otherwise>
+    </c:choose>
 </h2>
-<!-- The form action uses the servlet mapping; the category path is passed via a hidden field -->
-<form action="<%= request.getContextPath() %><%= request.getAttribute("action") %>" method="post" enctype="multipart/form-data">
-    <!-- Hidden field for the current category path -->
-    <input type="hidden" name="categoryPath" value="<%= request.getAttribute("categoryPath") %>" />
 
-    <!-- If editing, include the note's ID -->
-    <%
-        if ("edit".equals(request.getAttribute("action")) && request.getAttribute("note") != null) {
-    %>
-    <input type="hidden" name="noteId" value="<%= ((Note) request.getAttribute("note")).getId() %>" />
-    <%
-        }
-    %>
+<form action="${pageContext.request.contextPath}/note/${action}" method="post" enctype="multipart/form-data">
+    <input type="hidden" name="categoryPath" value="${categoryPath}" />
 
-    <!-- Note Title -->
+    <c:if test="${action eq 'edit' and not empty note}">
+        <input type="hidden" name="noteId" value="${note.id}" />
+    </c:if>
+
     <label for="title">Title:</label>
     <input type="text" id="title" name="title"
-           value="<%= (request.getAttribute("title") != null)
-                        ? request.getAttribute("title")
-                        : ((request.getAttribute("note") != null)
-                            ? ((Note)request.getAttribute("note")).getTitle()
-                            : "") %>" /><br/><br/>
+           value="${not empty title ? title : (not empty note ? note.title : '')}" /><br/><br/>
 
-    <%
-        // Retrieve the list of blocks from a partial submission or from the existing note.
-        List<Block> blocks = (List<Block>) request.getAttribute("blocks");
-        if (blocks == null) {
-            Note note = (Note) request.getAttribute("note");
-            if (note != null && note.getContentBlocks() != null && !note.getContentBlocks().isEmpty()) {
-                blocks = note.getContentBlocks();
-            } else {
-                blocks = new ArrayList<>();
-                blocks.add(new Block(1, "text", ""));
-            }
-        }
-        int blockCount = blocks.size();
-    %>
-    <!-- Hidden field for block count -->
-    <input type="hidden" name="blockCount" value="<%= blockCount %>" />
+    <c:set var="currentBlocks" value="${blocks}" />
+    <c:if test="${empty currentBlocks}">
+        <c:set var="currentBlocks" value="${note.contentBlocks}" />
+    </c:if>
 
-    <!-- Render each block -->
-    <%
-        for (int i = 0; i < blockCount; i++) {
-            Block block = blocks.get(i);
-    %>
-    <fieldset>
-        <legend>Block <%= (i + 1) %> (<%= block.getType() %>)</legend>
-        <!-- The block type is passed as hidden data -->
-        <input type="hidden" name="blockType" value="<%= block.getType() %>" />
-        <% if ("image".equalsIgnoreCase(block.getType())) { %>
-        <label for="blockImage<%= i %>">Upload Image:</label>
-        <input type="file" id="blockImage<%= i %>" name="blockImage<%= i %>" accept="image/*" /><br/>
-        <% if (block.getData() != null && !block.getData().isEmpty()) { %>
-        <p>Current Image: <img src="<%= request.getContextPath() + "/" + block.getData() %>" alt="Image" style="max-width:200px;"/></p>
-        <% } %>
-        <% } else { %>
-        <label for="blockData<%= i %>">Text:</label>
-        <textarea id="blockData<%= i %>" name="blockData" rows="4" cols="50"><%= block.getData() %></textarea>
-        <% } %>
-    </fieldset>
-    <%
-        }
-    %>
+    <c:choose>
+        <c:when test="${empty currentBlocks}">
+            <fieldset>
+                <legend>Block 1 (text)</legend>
+                <input type="hidden" name="blockType" value="text" />
+                <label for="blockData0">Text:</label>
+                <textarea id="blockData0" name="blockData" rows="4" cols="50"></textarea>
+            </fieldset>
+            <input type="hidden" name="blockCount" value="1" />
+        </c:when>
+        <c:otherwise>
+            <input type="hidden" name="blockCount" value="${fn:length(currentBlocks)}" />
+            <c:forEach var="block" items="${currentBlocks}" varStatus="status">
+                <fieldset>
+                    <legend>Block ${status.index + 1} (${block.type})</legend>
+                    <input type="hidden" name="blockType" value="${block.type}" />
+                    <c:choose>
+                        <c:when test="${fn:toLowerCase(block.type) eq 'image'}">
+                            <c:choose>
+                                <c:when test="${empty block.data}">
+                                    <label for="blockImage${status.index}">Upload Image:</label>
+                                    <input type="file" id="blockImage${status.index}" name="blockImage${status.index}" accept="image/*" /><br/>
+                                </c:when>
+                                <c:otherwise>
+                                    <p>Current Image: <img src="${pageContext.request.contextPath}/${block.data}" alt="Image" style="max-width:100px;"/></p>
+                                    <!-- Preserve the image path so it is submitted back and not lost -->
+                                    <input type="hidden" name="blockData" value="${block.data}" />
+                                </c:otherwise>
+                            </c:choose>
+                        </c:when>
+                        <c:otherwise>
+                            <label for="blockData${status.index}">Text:</label>
+                            <textarea id="blockData${status.index}" name="blockData" rows="4" cols="50">${block.data}</textarea>
+                        </c:otherwise>
+                    </c:choose>
+                </fieldset>
+            </c:forEach>
+        </c:otherwise>
+    </c:choose>
 
     <div class="button-group">
-        <!-- "Add Image" button triggers partial submission -->
         <input type="submit" name="actionType" value="Add Image" />
-        <!-- "Submit Note" finalizes the note -->
         <input type="submit" name="actionType" value="Submit Note" />
     </div>
 </form>

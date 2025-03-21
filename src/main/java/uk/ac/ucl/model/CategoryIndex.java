@@ -5,6 +5,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -15,19 +16,19 @@ import uk.ac.ucl.model.FileStorageManager;
 import uk.ac.ucl.model.Note;
 
 public class CategoryIndex implements IndexEntry{
-    private final int id;
+    private final long id;
     private String name;
-    private List<Integer> noteIds;
+    private List<Long> noteIds;
     private List<CategoryIndex> subCategories;
 
     private final LocalDateTime createdAt;
 
     @JsonCreator
     public CategoryIndex(@JsonProperty("name") String name,
-                         @JsonProperty("noteIds") List<Integer> noteIds,
+                         @JsonProperty("noteIds") List<Long> noteIds,
                          @JsonProperty("subCategories") List<CategoryIndex> subCategories,
                          @JsonProperty("createdAt") LocalDateTime createdAt,
-                         @JsonProperty("id") int id) {
+                         @JsonProperty("id") long id) {
         this.name = name;
         this.noteIds = (noteIds != null) ? noteIds : new ArrayList<>();
         this.subCategories = (subCategories != null) ? subCategories : new ArrayList<>();
@@ -36,7 +37,7 @@ public class CategoryIndex implements IndexEntry{
     }
 
     public CategoryIndex(String name) {
-        this.id = PersistentIdGenerator.getNextId();
+        this.id = Instant.now().toEpochMilli();
         this.name = name;
         this.noteIds =  new ArrayList<>();
         this.subCategories = new ArrayList<>();
@@ -45,7 +46,7 @@ public class CategoryIndex implements IndexEntry{
 
 
     @Override
-    public int getId() {
+    public long getId() {
         return id;
     }
 
@@ -67,7 +68,7 @@ public class CategoryIndex implements IndexEntry{
     @JsonIgnore
     public List<IndexEntry> getChildren() throws ServletException {
         FileStorageManager fileStorageManager = new FileStorageManager();
-        List<IndexEntry> children = new ArrayList<IndexEntry>(subCategories);
+        List<IndexEntry> children = new ArrayList<>(subCategories);
         List<Note> allNotes = new ArrayList<>();
 
         try {
@@ -78,14 +79,6 @@ public class CategoryIndex implements IndexEntry{
             throw new ServletException("Unable to load notes.", ex);
         }
         return children;
-    }
-
-    public List<Integer> getNoteIds() {
-        return noteIds;
-    }
-
-    public void setNoteIds(List<Integer> noteIds) {
-        this.noteIds = noteIds;
     }
 
     public List<CategoryIndex> getSubCategories() {
@@ -101,15 +94,23 @@ public class CategoryIndex implements IndexEntry{
     }
 
     // Method to add a note ID
-    public void addNoteId(int noteId) {
+    public void addNoteId(long noteId) {
         if (!noteIds.contains(noteId)) {
             noteIds.add(noteId);
         }
     }
 
     // Method to delete a note ID
-    public void deleteNoteId(int noteId) {
-        noteIds.remove(Integer.valueOf(noteId));
+    public void deleteNoteId(long noteId) {
+        noteIds.remove(noteId);
+    }
+
+    public List<Long> getNoteIds() {
+        return noteIds;
+    }
+
+    public void setNoteIds(List<Long> noteIds) {
+        this.noteIds = noteIds;
     }
 
     // Method to add a subcategory

@@ -48,7 +48,7 @@
             CategoryIndex currentCategory = categoryHierarchy.getLast();
             int lastCommaIndex = categoryPath.lastIndexOf(",");
             String backCategoryPath = (lastCommaIndex != -1) ? categoryPath.substring(0, lastCommaIndex) : "";
-            if (currentCategory != null && currentCategory.getId() != 0) {
+            if (currentCategory != null && currentCategory.getId() != 0L) {
     %>
     <h2>Category: <%= currentCategory.getName() %></h2>
     <form action="" method="get">

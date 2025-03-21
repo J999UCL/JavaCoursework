@@ -1,6 +1,7 @@
 // Note.java
 package uk.ac.ucl.model;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -17,7 +18,7 @@ import jakarta.servlet.ServletException;
 
 public class Note implements IndexEntry {
 
-    private final int id;
+    private final long id;
     private String title;
     private List<Block> contentBlocks;
 
@@ -26,7 +27,7 @@ public class Note implements IndexEntry {
     private LocalDateTime createdAt;
 
     public Note(String title, List<Block> contentBlocks){
-        this.id = PersistentIdGenerator.getNextId();
+        this.id = Instant.now().toEpochMilli();
         this.title = title;
         this.contentBlocks = contentBlocks;
         this.createdAt = LocalDateTime.now();
@@ -35,7 +36,7 @@ public class Note implements IndexEntry {
 
     // Parameterized constructor
     @JsonCreator
-    public Note(@JsonProperty("id") int id,
+    public Note(@JsonProperty("id") long id,
                 @JsonProperty("title") String title,
                 @JsonProperty("contentBlocks") List<Block> contentBlocks,
                 @JsonProperty("createdAt") LocalDateTime createdAt) {
@@ -47,7 +48,7 @@ public class Note implements IndexEntry {
 
     // Getters and setters
 
-    public int getId() {
+    public long getId() {
         return id;
     }
 

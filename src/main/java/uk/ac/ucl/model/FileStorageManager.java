@@ -65,7 +65,7 @@ public class FileStorageManager {
         objectMapper.writeValue(new File(CATEGORIES_FILE), root);
     }
 
-    public void SaveNewNote(String categoryPathParam, int id) throws Exception {
+    public void SaveNewNote(String categoryPathParam, long id) throws Exception {
         List<CategoryIndex> hierarchy = getCategoryHierarchy(this, categoryPathParam);
         CategoryIndex root = hierarchy.getFirst();
         CategoryIndex parentReference = hierarchy.getLast();
