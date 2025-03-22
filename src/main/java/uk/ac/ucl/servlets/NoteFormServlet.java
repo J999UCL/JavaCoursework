@@ -1,5 +1,7 @@
 package uk.ac.ucl.servlets;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import uk.ac.ucl.model.Block;
 import uk.ac.ucl.model.CategoryIndex;
 import uk.ac.ucl.model.FileStorageManager;
@@ -18,16 +20,13 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 @WebServlet({"/note/create", "/note/edit"})
 @MultipartConfig
 public class NoteFormServlet extends HttpServlet {
 
     private FileStorageManager fileStorageManager;
-
-    // Define a constant for the directory where uploaded images will be stored.
-    // Change this to your desired absolute path.
-    private static final String UPLOAD_DIR = "C:\\Users\\jeetu\\Desktop\\Java\\JavaCoursework\\src\\main\\webapp\\data\\";
 
     @Override
     public void init() throws ServletException {
@@ -103,43 +102,12 @@ public class NoteFormServlet extends HttpServlet {
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
-        String actionType = request.getParameter("actionType");
         String servletPath = request.getServletPath();
         boolean isEdit = servletPath.contains("edit");
 
-        if ("Add Image".equalsIgnoreCase(actionType)) {
-            processAddImage(request, response, isEdit);
-        } else if ("Submit Note".equalsIgnoreCase(actionType)) {
-            processSubmitNote(request, response, isEdit);
-        } else {
-            response.sendError(HttpServletResponse.SC_BAD_REQUEST, "Unknown action type.");
-        }
-    }
+        processSubmitNote(request, response, isEdit);
 
-    /**
-     * Processes the "Add Image" action: it retrieves the current blocks,
-     * appends a new image block and an empty text block, and then forwards
-     * back to the note form JSP with the updated state.
-     */
-    private void processAddImage(HttpServletRequest request, HttpServletResponse response, boolean isEdit)
-            throws ServletException, IOException {
-        List<Block> blocks = extractBlocksFromRequest(request);
-        int currentBlockCount = blocks.size();
 
-        // Append new blocks: an image block, then an empty text block.
-        blocks.add(new Block(currentBlockCount + 1, "image", ""));
-        blocks.add(new Block(currentBlockCount + 2, "text", ""));
-
-        // Preserve current form state.
-        request.setAttribute("blocks", blocks);
-        request.setAttribute("blockCount", blocks.size());
-        request.setAttribute("title", request.getParameter("title"));
-        request.setAttribute("categoryPath", request.getParameter("categoryPath"));
-        request.setAttribute("action", isEdit ? "edit" : "create");
-        if (isEdit) {
-            request.setAttribute("noteId", request.getParameter("noteId"));
-        }
-        request.getRequestDispatcher("/noteForm.jsp").forward(request, response);
     }
 
     /**
@@ -167,9 +135,9 @@ public class NoteFormServlet extends HttpServlet {
         if (isEdit) {
             // Update an existing note.
             String noteIdParam = request.getParameter("noteId");
-            int noteId;
+            long noteId;
             try {
-                noteId = Integer.parseInt(noteIdParam);
+                noteId = Long.parseLong(noteIdParam);
             } catch (NumberFormatException e) {
                 response.sendError(HttpServletResponse.SC_BAD_REQUEST, "Invalid note ID.");
                 return;
@@ -181,6 +149,7 @@ public class NoteFormServlet extends HttpServlet {
             }
             noteToEdit.setTitle(title);
             noteToEdit.setContentBlocks(blocks);
+
         } else {
             // Create a new note.
             Note newNote = new Note(title, blocks);
@@ -192,11 +161,10 @@ public class NoteFormServlet extends HttpServlet {
             } catch (Exception e) {
                 throw new ServletException("Error saving new note ID", e);
             }
+
         }
 
-        // Persist the updated list of notes.
-        try {
-            fileStorageManager.saveNotes(notes);
+        try {fileStorageManager.saveNotes(notes);
         } catch (Exception e) {
             throw new ServletException("Error saving notes", e);
         }
@@ -208,7 +176,7 @@ public class NoteFormServlet extends HttpServlet {
     /**
      * Helper method to locate a note by its ID in the list.
      */
-    private Note findNoteById(List<Note> notes, int noteId) {
+    private Note findNoteById(List<Note> notes, long noteId) {
         for (Note note : notes) {
             if (note.getId() == noteId) {
                 return note;
@@ -219,45 +187,55 @@ public class NoteFormServlet extends HttpServlet {
 
     /**
      * Extracts blocks from the request parameters and file parts.
-     * For each block type, it processes text data or, if the block is an image,
-     * handles the file upload and sets the image path.
+     * For each block:
+     *   - We read the "blockData" hidden field to retrieve the old data (text or image path).
+     *   - If it's a text block, we just set that data.
+     *   - If it's an image block:
+     *       If a new file was uploaded, we store the new file path.
+     *       Otherwise, we preserve the old data (existing image path).
      */
     private List<Block> extractBlocksFromRequest(HttpServletRequest request) throws ServletException, IOException {
         List<Block> blocks = new ArrayList<>();
-        int text_block_num = 0;
-        String[] blockTypes = request.getParameterValues("blockType");
-        String[] blockDataArr = request.getParameterValues("blockData");
 
-        if (blockTypes != null) {
-            for (int i = 0; i < blockTypes.length; i++) {
-                String type = blockTypes[i];
-                String data = "";
-                if ("text".equalsIgnoreCase(type)) {
-                    if( blockDataArr != null && blockDataArr.length > text_block_num) {
-                        data = blockDataArr[text_block_num];
-                    }
-                    text_block_num ++;
+        // Get parameters from hidden inputs.
+        String[] types = request.getParameterValues("blockType[]");
+        String[] texts = request.getParameterValues("blockData[]");
+        String[] images = request.getParameterValues("blockImage[]");
+
+        if (types == null || types.length == 0) {
+            return blocks;
+        }
+
+        int id = 1;
+        int textIndex = 0;
+        int imageIndex = 0;
+
+        for (String type : types) {
+            if ("text".equals(type)) {
+                if (texts != null && textIndex < texts.length) {
+                    String data = texts[textIndex++];
+                    Block block = new Block(id++, "text", data);
+                    blocks.add(block);
                 }
-                Block block = new Block(i + 1, type, data);
-                if ("image".equalsIgnoreCase(type)) {
-                    Part imagePart = request.getPart("blockImage" + i);
-                    if (imagePart != null && imagePart.getSubmittedFileName() != null &&
-                            !imagePart.getSubmittedFileName().isEmpty()) {
-                        // Use the defined UPLOAD_DIR instead of the webapp directory.
-                        File uploadDirFile = new File(UPLOAD_DIR);
-                        if (!uploadDirFile.exists()) {
-                            uploadDirFile.mkdirs();
-                        }
-                        String fileName = System.currentTimeMillis() + "_" + imagePart.getSubmittedFileName();
-                        String filePath = UPLOAD_DIR + File.separator + fileName;
-                        imagePart.write(filePath);
-                        // Store the relative path or the location as needed.
-                        block.setData(fileName);
+            } else if ("image".equals(type)) {
+                if (images != null && imageIndex < images.length) {
+                    // Decode the base64-encoded image string.
+                    String encodedData = java.net.URLDecoder.decode(images[imageIndex++], "UTF-8");
+                    // Remove data URL prefix if present.
+                    int commaIndex = encodedData.indexOf(',');
+                    if (commaIndex != -1) {
+                        encodedData = encodedData.substring(commaIndex + 1);
                     }
+                    byte[] imageBytes = java.util.Base64.getDecoder().decode(encodedData);
+                    // Save the image file instead of keeping it as raw bytes.
+                    // Assumes fileStorageManager.saveImageFile(byte[]) writes the image file to disk and returns its filename.
+                    String savedFileName = fileStorageManager.saveImageFile(imageBytes);
+                    Block block = new Block(id++, "image", savedFileName);
+                    blocks.add(block);
                 }
-                blocks.add(block);
             }
         }
         return blocks;
     }
+
 }

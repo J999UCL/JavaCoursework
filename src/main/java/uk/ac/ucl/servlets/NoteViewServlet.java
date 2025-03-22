@@ -10,10 +10,15 @@ import uk.ac.ucl.model.FileStorageManager;
 import uk.ac.ucl.model.IndexEntry;
 import uk.ac.ucl.model.Note;
 
+import javax.imageio.ImageIO;
+import java.awt.*;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.util.*;
+import java.util.List;
 
 import static uk.ac.ucl.model.Utils.getCategoryHierarchy;
 
@@ -78,12 +83,32 @@ public class NoteViewServlet extends HttpServlet {
         if (note.getContentBlocks() != null) {
             for (Block block : note.getContentBlocks()) {
                 if ("image".equalsIgnoreCase(block.getType())) {
-                    String key = block.getData(); // Use the image path as key
-                    String absolutePath = request.getServletContext().getRealPath("/") + "\\data\\" + key;
+                    String key = block.getData(); // image file name
+                    String absolutePath = request.getServletContext().getRealPath("/") +
+                            "\\data\\images\\" + key;
                     File imageFile = new File(absolutePath);
                     if (imageFile.exists()) {
                         try {
-                            byte[] fileContent = Files.readAllBytes(imageFile.toPath());
+                            // Read the original image
+                            BufferedImage originalImage = ImageIO.read(imageFile);
+
+                            // Set the target width (e.g., 300 pixels) and compute the height to maintain aspect ratio
+                            int targetWidth = 300;
+                            int targetHeight = originalImage.getHeight() * targetWidth / originalImage.getWidth();
+
+                            // Create a resized image
+                            BufferedImage resizedImage = new BufferedImage(targetWidth, targetHeight, BufferedImage.TYPE_INT_RGB);
+                            Graphics2D g2d = resizedImage.createGraphics();
+                            g2d.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+                            g2d.drawImage(originalImage, 0, 0, targetWidth, targetHeight, null);
+                            g2d.dispose();
+
+                            // Convert the resized image to a byte array
+                            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                            ImageIO.write(resizedImage, "jpg", baos);
+                            byte[] fileContent = baos.toByteArray();
+
+                            // Encode the resized image in Base64
                             String base64Image = Base64.getEncoder().encodeToString(fileContent);
                             String mimeType = request.getServletContext().getMimeType(imageFile.getName());
                             if (mimeType == null) {

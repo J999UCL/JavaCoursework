@@ -4,8 +4,16 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.type.CollectionType;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.Part;
 
+import java.io.ByteArrayInputStream;
 import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -14,6 +22,7 @@ import static uk.ac.ucl.model.Utils.getCategoryHierarchy;
 public class FileStorageManager {
     private static final String NOTES_FILE = "C:\\Users\\jeetu\\Desktop\\Java\\JavaCoursework\\src\\main\\webapp\\data\\notes.json";
     private static final String CATEGORIES_FILE = "C:\\Users\\jeetu\\Desktop\\Java\\JavaCoursework\\src\\main\\webapp\\data\\categories.json";
+    private static final String IMAGES_DIR = "C:\\Users\\jeetu\\Desktop\\Java\\JavaCoursework\\src\\main\\webapp\\data\\images";
 
     private final ObjectMapper objectMapper;
 
@@ -71,6 +80,53 @@ public class FileStorageManager {
         CategoryIndex parentReference = hierarchy.getLast();
         parentReference.addNoteId(id);
         objectMapper.writeValue(new File(CATEGORIES_FILE), root);
+    }
+
+    public String saveImage(Part imagePart) throws ServletException, IOException {
+        // Retrieve the original file name
+        String originalFileName = imagePart.getSubmittedFileName();
+        if (originalFileName == null || originalFileName.isEmpty()) {
+            throw new ServletException("No file selected for upload.");
+        }
+
+        // Prepend a timestamp to avoid collisions
+        String savedFileName = System.currentTimeMillis() + "_" + originalFileName;
+
+        // Ensure the upload directory exists
+        Path uploadPath = Path.of(IMAGES_DIR);
+        if (!Files.exists(uploadPath)) {
+            Files.createDirectories(uploadPath);
+        }
+
+        // Construct the full path to save the file
+        Path filePath = uploadPath.resolve(savedFileName);
+
+        // Copy the uploaded file to the target location
+        Files.copy(imagePart.getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
+
+        return savedFileName;
+    }
+
+    // Java
+    public String saveImageFile(byte[] imageBytes) throws IOException {
+        // Generate a default file name with a timestamp.
+        String defaultFileName = System.currentTimeMillis() + "_image.jpg";
+
+        // Ensure the upload directory exists.
+        Path uploadPath = Path.of(IMAGES_DIR);
+        if (!Files.exists(uploadPath)) {
+            Files.createDirectories(uploadPath);
+        }
+
+        // Construct the full path to save the file.
+        Path filePath = uploadPath.resolve(defaultFileName);
+
+        // Copy the byte array to the target location via a ByteArrayInputStream.
+        try (InputStream in = new ByteArrayInputStream(imageBytes)) {
+            Files.copy(in, filePath, StandardCopyOption.REPLACE_EXISTING);
+        }
+
+        return defaultFileName;
     }
 
     /**
