@@ -18,9 +18,15 @@ import jakarta.servlet.http.Part;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+import static uk.ac.ucl.model.Utils.getEncodedImages;
 
 @WebServlet({"/note/create", "/note/edit"})
 @MultipartConfig
@@ -81,6 +87,8 @@ public class NoteFormServlet extends HttpServlet {
             return;
         }
         request.setAttribute("note", note);
+        request.setAttribute("images", getEncodedImages(note, request));
+
         request.getRequestDispatcher("/noteForm.jsp").forward(request, response);
     }
 
@@ -197,45 +205,55 @@ public class NoteFormServlet extends HttpServlet {
     private List<Block> extractBlocksFromRequest(HttpServletRequest request) throws ServletException, IOException {
         List<Block> blocks = new ArrayList<>();
 
-        // Get parameters from hidden inputs.
-        String[] types = request.getParameterValues("blockType[]");
-        String[] texts = request.getParameterValues("blockData[]");
-        String[] images = request.getParameterValues("blockImage[]");
-
-        if (types == null || types.length == 0) {
-            return blocks;
+        // Retrieve the editor content from the hidden field
+        String editorContent = request.getParameter("editorContent");
+        if (editorContent == null) {
+            editorContent = "";
         }
 
-        int id = 1;
-        int textIndex = 0;
-        int imageIndex = 0;
+        // Prepare regex to match all <img ...> tags and capture the src attribute.
+        Pattern imgPattern = Pattern.compile("<img[^>]*src=\"([^\"]*)\"[^>]*>");
+        Matcher matcher = imgPattern.matcher(editorContent);
 
-        for (String type : types) {
-            if ("text".equals(type)) {
-                if (texts != null && textIndex < texts.length) {
-                    String data = texts[textIndex++];
-                    Block block = new Block(id++, "text", data);
-                    blocks.add(block);
-                }
-            } else if ("image".equals(type)) {
-                if (images != null && imageIndex < images.length) {
-                    // Decode the base64-encoded image string.
-                    String encodedData = java.net.URLDecoder.decode(images[imageIndex++], "UTF-8");
-                    // Remove data URL prefix if present.
-                    int commaIndex = encodedData.indexOf(',');
-                    if (commaIndex != -1) {
-                        encodedData = encodedData.substring(commaIndex + 1);
-                    }
-                    byte[] imageBytes = java.util.Base64.getDecoder().decode(encodedData);
-                    // Save the image file instead of keeping it as raw bytes.
-                    // Assumes fileStorageManager.saveImageFile(byte[]) writes the image file to disk and returns its filename.
-                    String savedFileName = fileStorageManager.saveImageFile(imageBytes);
-                    Block block = new Block(id++, "image", savedFileName);
-                    blocks.add(block);
-                }
+        // Retrieve all image parts from the request using the new attribute name "images[]"
+        List<Part> imageParts = new ArrayList<>();
+        for (Part part : request.getParts()) {
+            if ("images[]".equals(part.getName()) && part.getSize() > 0) {
+                imageParts.add(part);
             }
         }
+
+        int id = 0;
+
+        int imageIndex = 0;
+
+        int lastIndex = 0;
+        // Iterate over all image tag matches
+        while (matcher.find()) {
+            int start = matcher.start();
+            // Get the text block preceding the image tag
+            String textBlock = editorContent.substring(lastIndex, start);
+            if (!textBlock.trim().isEmpty()) {
+                blocks.add(new Block(id++, "text", textBlock));
+            }
+
+            // Process the corresponding image part if available
+            if (imageIndex < imageParts.size()) {
+                String savedFileName = fileStorageManager.saveImage(imageParts.get(imageIndex));
+                blocks.add(new Block(id++,"image", savedFileName));
+                imageIndex++;
+            }
+            lastIndex = matcher.end();
+        }
+
+        // Process any remaining text after the last image tag
+        if (lastIndex < editorContent.length()) {
+            String textBlock = editorContent.substring(lastIndex);
+            if (!textBlock.trim().isEmpty()) {
+                blocks.add(new Block(id++, "text", textBlock));
+            }
+        }
+
         return blocks;
     }
-
 }

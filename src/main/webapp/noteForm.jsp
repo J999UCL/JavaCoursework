@@ -1,5 +1,6 @@
 <%@ page contentType="text/html; charset=UTF-8" language="java" %>
 <%@ taglib prefix="c" uri="http://java.sun.com/jsp/jstl/core" %>
+<%@ taglib prefix="fn" uri="http://java.sun.com/jsp/jstl/functions" %>
 <!DOCTYPE html>
 <html>
 <head>
@@ -37,10 +38,6 @@
         .button-group button {
             margin-right: 0.5em;
         }
-        /* Highlight editor on dragover */
-        #editor.dragover {
-            outline: 2px dashed #00f;
-        }
     </style>
 </head>
 <body>
@@ -52,23 +49,27 @@
     </c:choose>
 </h2>
 
-<form action="${pageContext.request.contextPath}/note/${action}" method="post" enctype="multipart/form-data">
-    <input type="hidden" name="categoryPath" value="${categoryPath}" />
-    <!-- If editing, include the note's ID -->
+<!--
+     enctype must be multipart/form-data so that file inputs are included
+     in the POST request.
+-->
+<form action="${pageContext.request.contextPath}/note/${action}"
+      method="post"
+      enctype="multipart/form-data"
+      onsubmit="syncEditorContent()">
 
+    <input type="hidden" name="categoryPath" value="${categoryPath}" />
+
+    <!-- If editing, include the note's ID -->
     <c:if test="${action eq 'edit' and not empty note}">
         <input type="hidden" name="noteId" value="${note.id}" />
     </c:if>
+
     <!-- Note title -->
     <label for="title">Title:</label>
     <input type="text" id="title" name="title"
            value="${not empty note ? note.title : ''}" />
     <br/><br/>
-
-
-    <!-- Hidden field for blockContainer -->
-    <div id="blockContainer"></div>
-
 
     <!-- Toolbar for formatting and image insertion -->
     <div id="toolbar">
@@ -79,24 +80,76 @@
 
         <!-- Button to insert image -->
         <button type="button" id="insertImageButton">Insert Image</button>
-        <!-- Hidden file input for images -->
-        <input type="file" id="imageInput" style="display:none;" accept="image/*">
 
-
+        <!-- A single visible file input for picking images (multiple times).
+             Each selection will be cloned and placed into the form, allowing
+             multiple picks that accumulate. -->
+        <input type="file"
+               id="imageInput"
+               name="images[]"
+               style="display:none;"
+               accept="image/*"
+               multiple>
     </div>
 
     <!-- WYSIWYG Editor -->
     <div id="editor" contenteditable="true">
+        <c:if test="${action eq 'edit' and not empty note}">
+            <c:if test="${not empty note.contentBlocks}">
+                <c:forEach var="block" items="${note.contentBlocks}">
+                    <c:choose>
+                        <c:when test="${block.type eq 'text'}">
+                            <p>
+                                <c:out value="${block.data}" />
+                            </p>
+                        </c:when>
+                        <c:when test="${block.type eq 'image'}">
+                            <c:set var="imgData" value="${images[block.data]}" />
+                            <c:choose>
+                                <c:when test="${not empty imgData}">
+                                    <img src="${imgData}"
+                                         alt="Image Block"
+                                         style="max-width:100%;"
+                                         data-existing="true"
+                                         data-ref="${block.data}" />
+                                </c:when>
+                                <c:otherwise>
+                                    <p>[Image not available]</p>
+                                </c:otherwise>
+                            </c:choose>
+                        </c:when>
+                        <c:otherwise>
+                            <p>
+                                <c:out value="${block.data}" />
+                            </p>
+                        </c:otherwise>
+                    </c:choose>
+                </c:forEach>
+            </c:if>
+        </c:if>
     </div>
 
+
+    <textarea id="editorContent" name="editorContent" style="display:none;"></textarea>
+
     <div class="button-group" style="margin-top:1em;">
-        <button type="submit" onclick="prepareBlocks()">Submit Note</button>
+        <button type="submit">Submit Note</button>
     </div>
 </form>
 
+
 <script>
-    // Utility: Get current range in the editor.
-    // If no selection exists, place caret at end of editor.
+    /**
+     * Whenever the form is submitted, copy the current editor HTML into
+     * the hidden <textarea> so it will be sent with the form.
+     */
+    function syncEditorContent() {
+        document.getElementById('editorContent').value = document.getElementById('editor').innerHTML;
+    }
+
+    /**
+     * Simple utility to get or ensure a valid range in #editor.
+     */
     function getCurrentRange() {
         const editor = document.getElementById('editor');
         const sel = window.getSelection();
@@ -125,7 +178,7 @@
         const el = document.createElement(tagName);
         el.appendChild(frag);
         range.insertNode(el);
-        // Move caret after the new element.
+        // Move caret after the new element
         range.setStartAfter(el);
         range.setEndAfter(el);
         sel.removeAllRanges();
@@ -133,7 +186,7 @@
     }
 
     /**
-     * Apply color by wrapping selection in a span with inline color style.
+     * Apply color by wrapping selection in a <span style="color:...">
      */
     function applyColor() {
         const color = prompt("Enter a color or hex code:", "#ff0000");
@@ -157,7 +210,7 @@
     }
 
     /**
-     * Create a hyperlink by wrapping selection in an <a> tag.
+     * Create a hyperlink by wrapping selection in an <a href="..." target="_blank">
      */
     function createLink() {
         const url = prompt("Enter a URL:", "https://");
@@ -181,72 +234,44 @@
         sel.addRange(range);
     }
 
-    /**
-     * Insert an image as base64 into the editor using the provided logic.
-     * This function uses the logic from your provided snippet.
-     */
-    document.getElementById('insertImageButton').addEventListener('click', function(){
-        document.getElementById('imageInput').click();
-    });
-    const uploadedFiles = [];
-    // When a file is selected, read it as base64 and insert it at the current caret position.
-    document.getElementById('imageInput').addEventListener('change', function(event) {
-        const file = event.target.files[0];
-        if (!file) return;
+    // Handle multiple image picks that accumulate
+    const insertImageButton = document.getElementById('insertImageButton');
+    const fileInput = document.getElementById('imageInput');
+    const editorDiv = document.getElementById('editor');
+    const form = document.querySelector('form');
 
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            const base64String = e.target.result; // The base64 string of the image.
+    // Clicking "Insert Image" triggers file input
+    insertImageButton.addEventListener('click', () => {
+        fileInput.click();
+    });
+
+    fileInput.addEventListener('change', (event) => {
+        const files = event.target.files;
+        if (!files || files.length === 0) {
+            return;
+        }
+
+        // Preview each selected image in the editor
+        for (let i = 0; i < files.length; i++) {
+            const file = files[i];
             const img = document.createElement('img');
-            img.src = base64String;              // Set the image source to the base64 string.
-            img.style.maxWidth = "200px";         // Limit the image width for preview.
-            img.setAttribute('data-base64', base64String); // Save the base64 data for later use.
-            const editor = document.getElementById('editor');
-            editor.focus();
-            const range = getCurrentRange();
-            range.insertNode(img);
-            range.setStartAfter(img);
-            range.collapse(true);
-        };
-        reader.readAsDataURL(file);
+            img.src = URL.createObjectURL(file);
+            img.style.maxWidth = "200px";
+            editorDiv.appendChild(img);
+        }
+
+        // Clone the original file input (with all selected files)
+        const hiddenInput = fileInput.cloneNode(true);
+        hiddenInput.style.display = 'none';
+        // It's often best to remove the 'id' to avoid duplicates:
+        hiddenInput.removeAttribute('id');
+
+        // Append the clone into the form so these files get submitted
+        form.appendChild(hiddenInput);
+
+        // Reset the original input, so user can pick more images next time
+        fileInput.value = "";
     });
-
-
-    /**
-     * On submission, parse the editor's top-level child nodes into blocks.
-     * Each <img> becomes {type:"image", data: base64}, and everything else is a text block.
-     */
-    function prepareBlocks() {
-        const container = document.getElementById('blockContainer');
-        container.innerHTML = "";
-        const editor = document.getElementById("editor");
-        editor.childNodes.forEach(node => {
-            let html = "";
-            if (node.nodeType === Node.ELEMENT_NODE) {
-                if (node.tagName === "IMG") {
-                    const base64 = node.getAttribute('data-base64');
-                    if (base64) {
-                        html += '<input type="hidden" name="blockType[]" value="image" />';
-                        // Send the base64 string from the data attribute.
-                        html += '<input type="hidden" name="blockImage[]" value="' + encodeURIComponent(base64) + '" /><br/>';
-                    }
-                } else {
-                    html += '<input type="hidden" name="blockType[]" value="text" />';
-                    html += '<input type="hidden" name="blockData[]" value="' + encodeURIComponent(node.innerHTML) + '" />';
-                }
-            } else if (node.nodeType === Node.TEXT_NODE) {
-                const txt = node.textContent.trim();
-                if (txt.length > 0) {
-                    html += '<input type="hidden" name="blockType[]" value="text" />';
-                    html += '<input type="hidden" name="blockData[]" value="' + encodeURIComponent(txt) + '" />';
-                }
-            }
-            if (html !== "") {
-                container.innerHTML += html;
-            }
-        });
-
-    }
 </script>
 
 </body>

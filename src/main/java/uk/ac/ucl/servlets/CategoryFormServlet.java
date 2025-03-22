@@ -35,7 +35,6 @@ public class CategoryFormServlet extends HttpServlet {
         String categoryPathParam = request.getParameter("categoryPath");
         if (categoryPathParam == null){categoryPathParam = "0";}
 
-
         CategoryIndex newCategory = new CategoryIndex(categoryName);
 
         // Save the updated categories back to storage

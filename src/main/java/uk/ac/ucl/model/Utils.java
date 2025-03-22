@@ -1,20 +1,26 @@
 package uk.ac.ucl.model;
 
 import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
 
-import java.util.ArrayList;
-import java.util.Arrays;
+import javax.imageio.ImageIO;
+import java.awt.*;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.IOException;
+import java.util.*;
 import java.util.List;
 import java.util.stream.Collectors;
 
 public class Utils {
 
     // Parses the comma‑separated category path string into a list of integers.
-    public static List<Integer> parseCategoryPath(String categoryPathParam) {
+    public static List<Long> parseCategoryPath(String categoryPathParam) {
         if (categoryPathParam != null && !categoryPathParam.isEmpty()) {
             return Arrays.stream(categoryPathParam.split(","))
                     .map(String::trim)
-                    .map(Integer::parseInt)
+                    .map(Long::parseLong)
                     .collect(Collectors.toList());
         } else {
             return new ArrayList<>();
@@ -24,7 +30,7 @@ public class Utils {
     // Java
     public static List<CategoryIndex> getCategoryHierarchy(FileStorageManager fileStorageManager, String categoryPathParam)
             throws ServletException {
-        List<Integer> categoryPath = parseCategoryPath(categoryPathParam);
+        List<Long> categoryPath = parseCategoryPath(categoryPathParam);
         CategoryIndex rootCategory;
         try {
             rootCategory = fileStorageManager.loadCategories();
@@ -36,7 +42,7 @@ public class Utils {
         CategoryIndex current = rootCategory;
 //        Logic problem here
         for (int i = 1; i < categoryPath.size(); i++) {
-            Integer targetId = categoryPath.get(i);
+            long targetId = categoryPath.get(i);
             boolean found = false;
             for (CategoryIndex child : current.getSubCategories()) {
                 if (child.getId() == targetId) {
@@ -51,6 +57,54 @@ public class Utils {
             }
         }
         return hierarchy;
+    }
+
+    public static Map<String, String> getEncodedImages(Note note, HttpServletRequest request) {
+        Map<String, String> imageDataMap = new HashMap<>();
+        if (note.getContentBlocks() != null) {
+            for (Block block : note.getContentBlocks()) {
+                if ("image".equalsIgnoreCase(block.getType())) {
+                    String key = block.getData(); // image file name
+                    String absolutePath = request.getServletContext().getRealPath("/") +
+                            "\\data\\images\\" + key;
+                    File imageFile = new File(absolutePath);
+                    if (imageFile.exists()) {
+                        try {
+                            // Read the original image
+                            BufferedImage originalImage = ImageIO.read(imageFile);
+
+                            // Set the target width (e.g., 300 pixels) and compute the height to maintain aspect ratio
+                            int targetWidth = 300;
+                            int targetHeight = originalImage.getHeight() * targetWidth / originalImage.getWidth();
+
+                            // Create a resized image
+                            BufferedImage resizedImage = new BufferedImage(targetWidth, targetHeight, BufferedImage.TYPE_INT_RGB);
+                            Graphics2D g2d = resizedImage.createGraphics();
+                            g2d.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+                            g2d.drawImage(originalImage, 0, 0, targetWidth, targetHeight, null);
+                            g2d.dispose();
+
+                            // Convert the resized image to a byte array
+                            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                            ImageIO.write(resizedImage, "jpg", baos);
+                            byte[] fileContent = baos.toByteArray();
+
+                            // Encode the resized image in Base64
+                            String base64Image = Base64.getEncoder().encodeToString(fileContent);
+                            String mimeType = request.getServletContext().getMimeType(imageFile.getName());
+                            if (mimeType == null) {
+                                mimeType = "image/jpeg";
+                            }
+                            String dataUri = "data:" + mimeType + ";base64," + base64Image;
+                            imageDataMap.put(key, dataUri);
+                        } catch (IOException e) {
+                            // Skip image if reading fails
+                        }
+                    }
+                }
+            }
+        }
+        return imageDataMap;
     }
 
 
